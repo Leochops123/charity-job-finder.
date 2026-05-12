@@ -23,4 +23,29 @@ def get_charityjob_jobs(keyword: str, location: str) -> List[Dict]:
         url = f"{base}/jobs/{quote_plus(keyword)}/{quote_plus(location)}?sort=Date"
         headers = {"User-Agent": "Mozilla/5.0"}
         resp = requests.get(url, headers=headers, timeout=10)
-        resp.raise
+        resp.raise_for_status()                    # ← This line was broken before
+        soup = BeautifulSoup(resp.text, "html.parser")
+        
+        jobs = []
+        for card in soup.select(".job-result"):
+            link_el = card.select_one("h2 a")
+            if not link_el:
+                continue
+            title = link_el.get_text(strip=True)
+            link = link_el["href"]
+            if not link.startswith("http"):
+                link = base + link
+            jobs.append({"title": title, "company": "Unknown", "link": link, "source": "CharityJob"})
+        return jobs
+    except Exception:
+        return []
+
+
+def get_reed_jobs(keyword: str, location: str) -> List[Dict]:
+    try:
+        base = "https://www.reed.co.uk"
+        url = f"{base}/jobs/{quote_plus(keyword)}-jobs-in-{quote_plus(location)}"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        resp = requests.get(url, headers=headers, timeout=10)
+        resp.raise_for_status()
+       
