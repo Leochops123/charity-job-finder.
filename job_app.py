@@ -31,7 +31,6 @@ def send_job_email(receiver_email: str, jobs: List[Dict], location: str):
         st.error("❌ Email credentials not set in Streamlit Secrets.")
         return False
 
-    # Build job list safely (avoid multi-line f-string issues)
     job_items = []
     for job in jobs[:20]:
         job_items.append(
@@ -51,9 +50,7 @@ def send_job_email(receiver_email: str, jobs: List[Dict], location: str):
         </ul>
         <p>Good luck with your applications!</p>
         <hr>
-        <p style="font-size: 0.9em; color: #666;">
-            Sent from your Charity Job Finder app.
-        </p>
+        <p style="font-size: 0.9em; color: #666;">Sent from your Charity Job Finder app.</p>
     </body>
     </html>
     """
@@ -61,33 +58,4 @@ def send_job_email(receiver_email: str, jobs: List[Dict], location: str):
     msg = MIMEMultipart("alternative")
     msg['From'] = sender_email
     msg['To'] = receiver_email
-    msg['Subject'] = f"New Charity Jobs Found - {len(jobs)} opportunities ({date.today()})"
-
-    msg.attach(MIMEText(html, 'html'))
-
-    try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(sender_email, password)
-        server.sendmail(sender_email, receiver_email, msg.as_string())
-        server.quit()
-        return True
-    except Exception as e:
-        st.error(f"Failed to send email: {e}")
-        return False
-
-
-# ------------------- Scrapers -------------------
-def get_charityjob_jobs(keyword: str, location: str) -> List[Dict]:
-    try:
-        base = "https://www.charityjob.co.uk"
-        url = f"{base}/jobs/{quote_plus(keyword)}/{quote_plus(location)}?sort=Date"
-        
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        resp = requests.get(url, headers=headers, timeout=10)
-        resp.raise_for_status()
-        
-        soup = BeautifulSoup(resp.text, "html.parser")
-        jobs = []
-        for card in soup.select(".job-result"):
-            link_el
+    msg['Subject'] = f"New Charity Jobs
