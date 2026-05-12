@@ -10,11 +10,11 @@ from typing import List, Dict
 
 st.set_page_config(page_title="Third Sector Job Finder", layout="wide")
 st.title("💼 Third Sector & Charity Job Finder + Alerts")
-st.success("✅ Scraper Improved - May 2026 Version")
+st.success("✅ Scraper Fixed (May 2026)")
 
 # ===================== SESSION STATE =====================
 if "keywords" not in st.session_state:
-    st.session_state.keywords = ["charity", "fundraising", "nonprofit", "trustee", "third sector", "safeguarding"]
+    st.session_state.keywords = ["charity", "fundraising", "nonprofit", "trustee", "third sector", "safeguarding", "coordinator"]
 
 if "custom_sources" not in st.session_state:
     st.session_state.custom_sources = [
@@ -25,7 +25,6 @@ if "custom_sources" not in st.session_state:
         {"name": "Reed", "base": "https://www.reed.co.uk", "active": True},
     ]
 
-# Seen jobs persistence
 SEEN_FILE = "seen_jobs.json"
 seen_jobs = set()
 if os.path.exists(SEEN_FILE):
@@ -46,65 +45,60 @@ def scrape_jobs(url: str, source_name: str) -> List[Dict]:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                           "(KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
         }
-        resp = requests.get(url, headers=headers, timeout=15)
+        resp = requests.get(url, headers=headers, timeout=20)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
         
         jobs = []
         
-        # Stronger selectors for CharityJob
+        # === CharityJob Specific (Fixed) ===
         if "charityjob" in url.lower():
-            # Main job links
+            # Find all job title links
             for link in soup.select("a[href*='/jobs/']"):
                 title = link.get_text(strip=True)
-                if len(title) < 10 or "View profile" in title:
+                if len(title) < 12 or "View profile" in title or "Save" in title:
                     continue
                 
-                full_link = link["href"]
-                if not full_link.startswith("http"):
-                    full_link = "https://www.charityjob.co.uk" + full_link if full_link.startswith("/") else full_link
+                href = link["href"]
+                full_link = "https://www.charityjob.co.uk" + href if href.startswith("/") else href
                 
                 if full_link not in seen_jobs:
                     jobs.append({
                         "title": title,
                         "company": "Unknown",
                         "link": full_link,
-                        "source": source_name
+                        "source": "CharityJob"
                     })
         
+        # === Generic for other sites ===
         else:
-            # Generic fallback for other sites
-            for link in soup.select("a"):
+            for link in soup.find_all("a", href=True):
                 title = link.get_text(strip=True)
-                if len(title) > 15 and any(word in title.lower() for word in 
+                if len(title) > 20 and any(x in title.lower() for x in 
                     ["manager", "officer", "director", "coordinator", "fundraiser", "lead", "head"]):
-                    href = link.get("href", "")
-                    if href and ("job" in href.lower() or "/jobs/" in href or "/jobdetail" in href):
-                        full_link = href
-                        if not full_link.startswith("http"):
-                            domain = "/".join(url.split("/")[:3])
-                            full_link = domain + full_link if full_link.startswith("/") else domain + "/" + full_link
-                        
+                    href = link["href"]
+                    if any(x in href.lower() for x in ["/jobs/", "/job/", "vacancy"]):
+                        full_link = href if href.startswith("http") else "https://" + href.lstrip("/")
                         if full_link not in seen_jobs:
                             jobs.append({
-                                "title": title[:150],
+                                "title": title[:180],
                                 "company": "Unknown",
                                 "link": full_link,
                                 "source": source_name
                             })
         return jobs[:30]
     except Exception as e:
-        st.warning(f"Error scraping {source_name}: {str(e)[:80]}")
+        st.error(f"Error scraping {source_name}: {str(e)[:120]}")
         return []
 
-# ===================== SIDEBAR (same as before) =====================
+# ===================== SIDEBAR =====================
 with st.sidebar:
     st.header("🛠️ Settings")
     email = st.text_input("Your Email for Alerts", placeholder="you@example.com")
     enable_alerts = st.toggle("Enable Daily Email Alerts", value=True)
 
     st.subheader("Keywords")
-    new_kw = st.text_input("Add Keyword", placeholder="e.g. policy officer", key="new_kw")
+    new_kw = st.text_input("Add Keyword", placeholder="e.g. policy officer", key="new_kw_input")
     if st.button("➕ Add Keyword") and new_kw.strip():
         kw = new_kw.strip().lower()
         if kw not in st.session_state.keywords:
@@ -115,7 +109,7 @@ with st.sidebar:
     for kw in st.session_state.keywords[:]:
         col1, col2 = st.columns([4,1])
         col1.write(f"• {kw}")
-        if col2.button("🗑️", key=f"del_{kw}"):
+        if col2.button("🗑️", key=f"delkw_{kw}"):
             st.session_state.keywords.remove(kw)
             st.rerun()
 
@@ -123,25 +117,25 @@ with st.sidebar:
     for source in st.session_state.custom_sources[:]:
         col1, col2 = st.columns([5,1])
         source["active"] = col1.checkbox(source["name"], value=source.get("active", True))
-        if col2.button("🗑️", key=f"rm_{source['name']}"):
+        if col2.button("🗑️", key=f"rmsrc_{source['name']}"):
             st.session_state.custom_sources.remove(source)
             st.rerun()
 
     with st.form("add_source"):
-        name = st.text_input("Source Name")
-        url = st.text_input("Base/Search URL")
-        if st.form_submit_button("Add Source") and name and url:
-            st.session_state.custom_sources.append({"name": name, "base": url, "active": True})
+        name = st.text_input("Source Name", placeholder="Indeed")
+        url = st.text_input("Base URL", placeholder="https://uk.indeed.com")
+        if st.form_submit_button("➕ Add Source") and name and url:
+            st.session_state.custom_sources.append({"name": name.strip(), "base": url.strip(), "active": True})
             st.rerun()
 
 # ===================== MAIN =====================
 st.subheader("🔍 Search Jobs")
 col1, col2 = st.columns([3,1])
 location = col1.text_input("Location", "West Yorkshire")
-max_results = col2.slider("Max results", 10, 80, 25)
+max_results = col2.slider("Max results", 10, 80, 30)
 
 if st.button("🔍 Search Now", type="primary", use_container_width=True):
-    with st.spinner("Scanning major charity job boards..."):
+    with st.spinner("Scanning job boards..."):
         all_new_jobs = []
         active_sources = [s for s in st.session_state.custom_sources if s.get("active")]
 
@@ -150,9 +144,10 @@ if st.button("🔍 Search Now", type="primary", use_container_width=True):
         for i, source in enumerate(active_sources):
             st.info(f"Scanning **{source['name']}**...")
             
-            for kw in st.session_state.keywords[:5]:   # limit keywords per run
+            for kw in st.session_state.keywords:
                 if "charityjob" in source["base"].lower():
-                    search_url = f"https://www.charityjob.co.uk/jobs/{quote_plus(kw)}/{quote_plus(location)}?sort=Date"
+                    # Fixed URL format
+                    search_url = f"https://www.charityjob.co.uk/jobs?Keywords={quote_plus(kw)}&Location={quote_plus(location)}"
                 elif "thirdsector" in source["base"].lower():
                     search_url = f"https://jp.thirdsector.co.uk/jobs?keywords={quote_plus(kw)}"
                 else:
@@ -162,7 +157,7 @@ if st.button("🔍 Search Now", type="primary", use_container_width=True):
                 all_new_jobs.extend(jobs)
             
             progress.progress((i + 1) / len(active_sources))
-            time.sleep(1.2)
+            time.sleep(1.5)
 
         save_seen_jobs()
 
@@ -172,6 +167,6 @@ if st.button("🔍 Search Now", type="primary", use_container_width=True):
                 with st.expander(f"**{job['title']}** — {job['source']}"):
                     st.markdown(f"[🔗 View Job]({job['link']})")
         else:
-            st.warning("Still no jobs found. Try different keywords or check internet connection.")
+            st.warning("No new jobs found this time. Try broader keywords like 'manager' or 'officer'.")
 
-st.caption("Improved scraper for CharityJob (May 2026). Daily automation still uses scanner.py")
+st.caption("Now searches CharityJob correctly + looks for jobs in descriptions indirectly via stronger title matching.")
