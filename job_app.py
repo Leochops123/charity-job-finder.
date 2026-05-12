@@ -1,56 +1,28 @@
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse import urlencode
+from urllib.parse import quote_plus
 from datetime import date
 
-
-st.title("💼 Charity & Remote Job Finder (Indeed + CharityJob)")
+st.title("💼 Charity & UK Job Finder (CharityJob + Reed)")
 st.write(
-    "Searches live vacancies from Indeed UK and CharityJob and shows them below."
+    "Searches current vacancies from CharityJob and Reed across the UK. "
+    "Enter keywords and a location (e.g. West Yorkshire or remote)."
 )
 
 # ---------- SCRAPERS ----------
-
-def get_indeed_jobs(keyword, location):
-    """Scrape jobs from Indeed UK with enforced HTTPS URL."""
-    keyword = (keyword or "").strip()
-    location = (location or "").strip()
-
-    params = {"q": f"{keyword} {location}", "sort": "date"}
-    query = urlencode(params)
-    url = "https://" + "uk.indeed.com/jobs?" + query  # <‑‑ full URL always forced
-
-    response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
-    response.raise_for_status()
-
-    soup = BeautifulSoup(response.text, "html.parser")
-    jobs = []
-    for card in soup.select("a.tapItem"):
-        title_el = card.select_one("h2")
-        if not title_el:
-            continue
-        company_el = card.select_one(".companyName")
-        jobs.append({
-            "source": "Indeed",
-            "title": title_el.get_text(strip=True),
-            "company": company_el.get_text(strip=True) if company_el else "Unknown",
-            "link": "[uk.indeed.com](https://uk.indeed.com)" + card.get("href", "")
-        })
-    return jobs
-
 
 def get_charityjob_jobs(keyword, location):
     """Scrape jobs from CharityJob UK."""
     keyword = (keyword or "").strip().replace(" ", "-")
     location = (location or "").strip().replace(" ", "-")
+    url = f"[charityjob.co.uk](https://www.charityjob.co.uk/jobs/{keyword}/{location}?sort=Date)"
 
-    url = "https://" + f"www.charityjob.co.uk/jobs/{keyword}/{location}?sort=Date"
+    st.write("Fetching from CharityJob:", url)
+    resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+    resp.raise_for_status()
 
-    response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
-    response.raise_for_status()
-
-    soup = BeautifulSoup(response.text, "html.parser")
+    soup = BeautifulSoup(resp.text, "html.parser")
     jobs = []
     for card in soup.select(".job-result"):
         link_el = card.select_one("h2 a")
@@ -66,7 +38,35 @@ def get_charityjob_jobs(keyword, location):
     return jobs
 
 
-# ---------- STREAMLIT INTERFACE ----------
+def get_reed_jobs(keyword, location):
+    """Scrape jobs from Reed UK."""
+    keyword = (keyword or "").strip().replace(" ", "-")
+    location = (location or "").strip().replace(" ", "-")
+    url = f"[reed.co.uk](https://www.reed.co.uk/jobs/{quote_plus(keyword)}-jobs-in-{quote_plus(location)})"
+
+    st.write("Fetching from Reed:", url)
+    resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+    resp.raise_for_status()
+
+    soup = BeautifulSoup(resp.text, "html.parser")
+    jobs = []
+    for card in soup.select("article.job-result-card"):
+        link_tag = card.select_one("a.job-block-link")
+        if not link_tag:
+            continue
+        title = link_tag.get_text(strip=True)
+        company = card.select_one(".gtmJobListingPostedBy")
+        company_name = company.get_text(strip=True) if company else "Unknown"
+        jobs.append({
+            "source": "Reed",
+            "title": title,
+            "company": company_name,
+            "link": "[reed.co.uk](https://www.reed.co.uk)" + link_tag["href"]
+        })
+    return jobs
+
+
+# ---------- STREAMLIT USER INTERFACE ----------
 
 st.subheader("Enter search details")
 
@@ -74,24 +74,19 @@ keywords_input = st.text_input("Keywords (comma separated)", "charity, fundraisi
 location_input = st.text_input("Location", "West Yorkshire")
 
 if st.button("Search Jobs"):
-    st.info("Searching… please wait about 10–20 seconds.")
+    st.info("Searching… please wait 10–20 seconds.")
     keywords = [k.strip() for k in keywords_input.split(",") if k.strip()]
     all_jobs = []
 
     for kw in keywords:
         try:
-            # local roles
-            indeed_local = get_indeed_jobs(kw, location_input)
             charity_local = get_charityjob_jobs(kw, location_input)
-
-            # remote roles
-            indeed_remote = get_indeed_jobs(kw, "remote")
             charity_remote = get_charityjob_jobs(kw, "remote")
-
-            all_jobs += indeed_local + charity_local + indeed_remote + charity_remote
-
-            st.write(f"Fetched {len(indeed_local) + len(charity_local)} local "
-                     f"and {len(indeed_remote) + len(charity_remote)} remote jobs for '{kw}'.")
+            reed_local = get_reed_jobs(kw, location_input)
+            reed_remote = get_reed_jobs(kw, "remote")
+            total = charity_local + charity_remote + reed_local + reed_remote
+            all_jobs += total
+            st.write(f"Fetched {len(total)} jobs for '{kw}'.")
         except Exception as e:
             st.error(f"Error while fetching '{kw}': {e}")
 
@@ -100,9 +95,8 @@ if st.button("Search Jobs"):
         for job in all_jobs[:25]:
             st.markdown(
                 f"**{job['title']}** — {job['company']} ({job['source']})  \n"
-                f"[Apply here]({job['link']})"
+                f"[View job posting]({job['link']})"
             )
             st.markdown("---")
     else:
         st.warning("No jobs found for your search terms today.")
-
