@@ -13,18 +13,20 @@ st.write(
 # ---------- SCRAPERS ----------
 
 def get_indeed_jobs(keyword, location):
-    """Scrape jobs from Indeed UK."""
+    """Scrape jobs from Indeed UK (fully qualified https URLs)."""
     keyword = (keyword or "").strip()
     location = (location or "").strip()
 
     params = {"q": f"{keyword} {location}", "sort": "date"}
-    url = f"[uk.indeed.com](https://uk.indeed.com/jobs?{urlencode(params)})"
+    base_url = "[uk.indeed.com](https://uk.indeed.com/jobs)"
+    url = f"{base_url}?{urlencode(params)}"
 
     st.write("Fetching from Indeed:", url)
-    resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
-    resp.raise_for_status()
 
-    soup = BeautifulSoup(resp.text, "html.parser")
+    response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+    response.raise_for_status()
+
+    soup = BeautifulSoup(response.text, "html.parser")
     jobs = []
     for card in soup.select("a.tapItem"):
         title_el = card.select_one("h2")
@@ -48,10 +50,10 @@ def get_charityjob_jobs(keyword, location):
     url = f"[charityjob.co.uk](https://www.charityjob.co.uk/jobs/{keyword}/{location}?sort=Date)"
     st.write("Fetching from CharityJob:", url)
 
-    resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
-    resp.raise_for_status()
+    response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+    response.raise_for_status()
 
-    soup = BeautifulSoup(resp.text, "html.parser")
+    soup = BeautifulSoup(response.text, "html.parser")
     jobs = []
     for card in soup.select(".job-result"):
         link_el = card.select_one("h2 a")
@@ -81,9 +83,10 @@ if st.button("Search Jobs"):
 
     for kw in keywords:
         try:
+            # Local roles
             all_jobs += get_indeed_jobs(kw, location_input)
             all_jobs += get_charityjob_jobs(kw, location_input)
-            # plus remote roles
+            # Remote roles
             all_jobs += get_indeed_jobs(kw, "remote")
             all_jobs += get_charityjob_jobs(kw, "remote")
         except Exception as e:
@@ -99,3 +102,4 @@ if st.button("Search Jobs"):
             st.markdown("---")
     else:
         st.warning("No jobs found for your search terms today.")
+
