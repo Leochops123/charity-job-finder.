@@ -7,20 +7,20 @@ from email.mime.multipart import MIMEMultipart
 from datetime import date
 from urllib.parse import quote_plus
 def get_jobs(keyword, location):
-    """Return a list of job dicts from Indeed for a given keyword/location."""
+    """Return job dicts from Indeed using a verified URL."""
     from urllib.parse import urlencode
+
     keyword = (keyword or "").strip()
     location = (location or "").strip()
+    params = {"q": f"{keyword} {location}", "sort": "date"}
+    base_url = "[uk.indeed.com](https://uk.indeed.com/jobs)"
+    url = f"{base_url}?{urlencode(params)}"
 
-    # build the URL safely
-    query_string = urlencode({"q": f"{keyword} {location}", "sort": "date"})
-    url = f"[uk.indeed.com](https://uk.indeed.com/jobs?{query_string})"
+    # double‑check URL
+    st.write("DEBUG URL:", url)
 
-    # double‑check what URL was built (for debugging)
-    print("Fetching:", url)
-    st.write("DEBUG URL:", url)
     resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
-    resp.raise_for_status()   # will crash clearly if site is unreachable
+    resp.raise_for_status()
     soup = BeautifulSoup(resp.text, "html.parser")
 
     jobs = []
@@ -35,6 +35,7 @@ def get_jobs(keyword, location):
             "link": "[uk.indeed.com](https://uk.indeed.com)" + card.get("href", "")
         })
     return jobs
+
 
 
 
