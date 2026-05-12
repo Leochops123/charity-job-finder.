@@ -1,28 +1,23 @@
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+from urllib.parse import urlencode
 from datetime import date
-from urllib.parse import quote_plus
-def get_jobs(keyword, location):
-    """Return job dicts from Indeed using a verified URL."""
-    from urllib.parse import urlencode
 
-    keyword = (keyword or "").strip()
-    location = (location or "").strip()
+st.title("💼 Charity & Remote Job Finder (Indeed + CharityJob)")
+st.write("Search live vacancies from Indeed and CharityJob in West Yorkshire or UK remote roles.")
+
+# ---------- Scrapers ----------
+
+def get_indeed_jobs(keyword, location):
+    """Scrape Indeed UK."""
     params = {"q": f"{keyword} {location}", "sort": "date"}
     base_url = "[uk.indeed.com](https://uk.indeed.com/jobs)"
     url = f"{base_url}?{urlencode(params)}"
-
-    # double‑check URL
-    st.write("DEBUG URL:", url)
-
+    st.write("Fetching Indeed:", url)
     resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
     resp.raise_for_status()
     soup = BeautifulSoup(resp.text, "html.parser")
-
     jobs = []
     for card in soup.select("a.tapItem"):
         title_el = card.select_one("h2")
@@ -30,43 +25,63 @@ def get_jobs(keyword, location):
             continue
         company_el = card.select_one(".companyName")
         jobs.append({
+            "source": "Indeed",
             "title": title_el.get_text(strip=True),
             "company": company_el.get_text(strip=True) if company_el else "Unknown",
-            "link": "[uk.indeed.com](https://uk.indeed.com)" + card.get("href", "")
+            "link": "[uk.indeed.com](https://uk.indeed.com)" + card["href"]
         })
     return jobs
 
 
+def get_charityjob_jobs(keyword, location):
+    """Scrape CharityJob UK."""
+    safe_kw = keyword.replace(" ", "-")
+    safe_loc = location.replace(" ", "-")
+    url = f"[charityjob.co.uk](https://www.charityjob.co.uk/jobs/{safe_kw}/{safe_loc}?sort=Date)"
+    st.write("Fetching CharityJob:", url)
+    resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+    resp.raise_for_status()
+    soup = BeautifulSoup(resp.text, "html.parser")
+    jobs = []
+    for card in soup.select(".job-result"):
+        title_el = card.select_one("h2 a")
+        if not title_el:
+            continue
+        company_el = card.select_one(".job-result__org")
+        jobs.append({
+            "source": "CharityJob",
+            "title": title_el.get_text(strip=True),
+            "company": company_el.get_text(strip=True) if company_el else "Unknown",
+            "link": "[charityjob.co.uk](https://www.charityjob.co.uk)" + title_el["href"]
+        })
+    return jobs
 
 
+# ---------- Streamlit Interface ----------
 
-def send_email(from_addr, app_pass, to_addr, jobs, location):
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"Charity & Remote Jobs – {location} – {date.today()}"
-    msg["From"] = from_addr
-    msg["To"] = to_addr
-    html = "<h3>New Jobs</h3><ul>"
-    for j in jobs:
-        html += f"<li><b>{j['title']}</b> — {j['company']}<br><a href='{j['link']}'>Apply</a></li>"
-    html += "</ul>"
-    msg.attach(MIMEText(html, "html"))
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
-        s.login(from_addr, app_pass)
-        s.send_message(msg)
-
-st.title("💼 Charity & Remote Job Finder")
 keywords = st.text_input("Keywords (comma separated)", "charity, fundraising")
 location = st.text_input("Location", "West Yorkshire")
-gmail = st.text_input("Your Gmail address")
-app_password = st.text_input("Gmail App Password", type="password")
-send_to = st.text_input("Send results to (leave blank to use Gmail address)")
-if st.button("Search and Email Jobs"):
+
+if st.button("Search Jobs"):
+    st.info("Searching…")
+    keywords_list = [k.strip() for k in keywords.split(",") if k.strip()]
     all_jobs = []
-    for k in [k.strip() for k in keywords.split(",") if k.strip()]:
-        all_jobs += get_jobs(k, location)
-        all_jobs += get_jobs(k, "remote")
+    for kw in keywords_list:
+        try:
+            all_jobs += get_indeed_jobs(kw, location)
+            all_jobs += get_charityjob_jobs(kw, location)
+            # also remote jobs
+            all_jobs += get_indeed_jobs(kw, "remote")
+            all_jobs += get_charityjob_jobs(kw, "remote")
+        except Exception as e:
+            st.error(f"Error for {kw}: {e}")
+
     if all_jobs:
-        send_email(gmail, app_password, send_to or gmail, all_jobs, location)
-        st.success(f"✅ Sent {len(all_jobs)} jobs to {send_to or gmail}")
+        st.success(f"✅ Found {len(all_jobs)} jobs on {date.today()}")
+        for j in all_jobs[:20]:  # show first 20 results
+            st.write(f"**{j['title']}** — {j['company']} ({j['source']})")
+            st.write(j['link'])
+            st.markdown("---")
     else:
-        st.warning("No jobs found.")
+        st.warning("No jobs found today.")
+
