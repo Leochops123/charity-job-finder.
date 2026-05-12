@@ -4,24 +4,22 @@ from bs4 import BeautifulSoup
 from urllib.parse import urlencode
 from datetime import date
 
+
 st.title("💼 Charity & Remote Job Finder (Indeed + CharityJob)")
 st.write(
-    "Searches live vacancies from Indeed UK and CharityJob. "
-    "Displays the latest results for your keywords and location."
+    "Searches live vacancies from Indeed UK and CharityJob and shows them below."
 )
 
 # ---------- SCRAPERS ----------
 
 def get_indeed_jobs(keyword, location):
-    """Scrape jobs from Indeed UK (fully qualified https URLs)."""
+    """Scrape jobs from Indeed UK with enforced HTTPS URL."""
     keyword = (keyword or "").strip()
     location = (location or "").strip()
 
     params = {"q": f"{keyword} {location}", "sort": "date"}
-    base_url = "[uk.indeed.com](https://uk.indeed.com/jobs)"
-    url = f"{base_url}?{urlencode(params)}"
-
-    st.write("Fetching from Indeed:", url)
+    query = urlencode(params)
+    url = "https://" + "uk.indeed.com/jobs?" + query  # <‑‑ full URL always forced
 
     response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
     response.raise_for_status()
@@ -47,8 +45,7 @@ def get_charityjob_jobs(keyword, location):
     keyword = (keyword or "").strip().replace(" ", "-")
     location = (location or "").strip().replace(" ", "-")
 
-    url = f"[charityjob.co.uk](https://www.charityjob.co.uk/jobs/{keyword}/{location}?sort=Date)"
-    st.write("Fetching from CharityJob:", url)
+    url = "https://" + f"www.charityjob.co.uk/jobs/{keyword}/{location}?sort=Date"
 
     response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
     response.raise_for_status()
@@ -77,24 +74,30 @@ keywords_input = st.text_input("Keywords (comma separated)", "charity, fundraisi
 location_input = st.text_input("Location", "West Yorkshire")
 
 if st.button("Search Jobs"):
-    st.info("Searching… please wait 10–20 seconds.")
+    st.info("Searching… please wait about 10–20 seconds.")
     keywords = [k.strip() for k in keywords_input.split(",") if k.strip()]
     all_jobs = []
 
     for kw in keywords:
         try:
-            # Local roles
-            all_jobs += get_indeed_jobs(kw, location_input)
-            all_jobs += get_charityjob_jobs(kw, location_input)
-            # Remote roles
-            all_jobs += get_indeed_jobs(kw, "remote")
-            all_jobs += get_charityjob_jobs(kw, "remote")
+            # local roles
+            indeed_local = get_indeed_jobs(kw, location_input)
+            charity_local = get_charityjob_jobs(kw, location_input)
+
+            # remote roles
+            indeed_remote = get_indeed_jobs(kw, "remote")
+            charity_remote = get_charityjob_jobs(kw, "remote")
+
+            all_jobs += indeed_local + charity_local + indeed_remote + charity_remote
+
+            st.write(f"Fetched {len(indeed_local) + len(charity_local)} local "
+                     f"and {len(indeed_remote) + len(charity_remote)} remote jobs for '{kw}'.")
         except Exception as e:
-            st.error(f"Error while fetching {kw}: {e}")
+            st.error(f"Error while fetching '{kw}': {e}")
 
     if all_jobs:
-        st.success(f"✅ Found {len(all_jobs)} jobs on {date.today()}")
-        for job in all_jobs[:25]:  # show first 25 results
+        st.success(f"✅ Found {len(all_jobs)} total jobs on {date.today()}")
+        for job in all_jobs[:25]:
             st.markdown(
                 f"**{job['title']}** — {job['company']} ({job['source']})  \n"
                 f"[Apply here]({job['link']})"
