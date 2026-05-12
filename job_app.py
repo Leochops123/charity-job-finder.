@@ -91,7 +91,7 @@ if st.button("Search Jobs"):
 
     if all_jobs:
         st.success(f"✅ Found {len(all_jobs)} jobs on {date.today()}")
-        for job in all_jobs[:25]:  # first 25 results
+        for job in all_jobs[:25]:  # show first 25 results
             st.markdown(
                 f"**{job['title']}** — {job['company']} ({job['source']})  \n"
                 f"[Apply here]({job['link']})"
