@@ -6,9 +6,13 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import date
 from urllib.parse import quote_plus
-
 def get_jobs(keyword, location):
-    url = f"[uk.indeed.com](https://uk.indeed.com/jobs?q={quote_plus(keyword)}+{quote_plus(location)}&sort=date)"
+    keyword = keyword.strip()
+    location = location.strip()
+    base = "[uk.indeed.com](https://uk.indeed.com)"
+    query = f"{keyword} {location}".replace(" ", "+")
+    url = f"{base}/jobs?q={query}&sort=date"
+
     html = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}).text
     soup = BeautifulSoup(html, "html.parser")
     jobs = []
@@ -20,9 +24,11 @@ def get_jobs(keyword, location):
         jobs.append({
             "title": title.get_text(strip=True),
             "company": company.get_text(strip=True) if company else "Unknown",
-            "link": "[uk.indeed.com](https://uk.indeed.com)" + card["href"]
+            "link": base + card["href"]
         })
     return jobs
+
+
 
 def send_email(from_addr, app_pass, to_addr, jobs, location):
     msg = MIMEMultipart("alternative")
