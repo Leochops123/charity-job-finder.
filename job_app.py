@@ -31,10 +31,7 @@ def send_job_email(receiver_email: str, jobs: List[Dict], location: str):
         st.error("❌ Email credentials not set in Streamlit Secrets.")
         return False
 
-    # Build job list
-    job_items = []
+    # Build HTML safely with simple concatenation
+    job_list = ""
     for job in jobs[:20]:
-        job_items.append(
-            f"<li><strong>{job['title']}</strong><br>"
-            f"{job['company']} • {job['source']}<br>"
-            f"<a
+        job_list += "<li><strong>" + job['title'] + "</strong><br>"
