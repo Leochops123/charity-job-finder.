@@ -14,7 +14,7 @@ def get_jobs(keyword, location):
     location = (location or "").strip()
     params = {"q": f"{keyword} {location}", "sort": "date"}
     base_url = "[uk.indeed.com](https://uk.indeed.com/jobs)"
-url = f"{base_url}?{urlencode(params)}"
+    url = f"{base_url}?{urlencode(params)}"
 
     # double‑check URL
     st.write("DEBUG URL:", url)
