@@ -18,7 +18,7 @@ def get_jobs(keyword, location):
 
     # double‑check what URL was built (for debugging)
     print("Fetching:", url)
-
+    st.write("DEBUG URL:", url)
     resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
     resp.raise_for_status()   # will crash clearly if site is unreachable
     soup = BeautifulSoup(resp.text, "html.parser")
