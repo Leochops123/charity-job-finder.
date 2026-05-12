@@ -9,7 +9,7 @@ from typing import List, Dict
 
 st.set_page_config(page_title="Third Sector Job Finder", layout="wide")
 st.title("💼 Third Sector & Charity Job Finder + Alerts")
-st.success("✅ Indeed Scraper Fixed & Strengthened")
+st.success("✅ Syntax Fixed | Indeed Improved")
 
 # ===================== SESSION STATE =====================
 if "keywords" not in st.session_state:
@@ -23,10 +23,20 @@ if "custom_sources" not in st.session_state:
         {"name": "Guardian", "base": "https://jobs.theguardian.com", "active": False},
     ]
 
+# Seen jobs
 SEEN_FILE = "seen_jobs.json"
 seen_jobs = set()
 if os.path.exists(SEEN_FILE):
     try:
         with open(SEEN_FILE, "r") as f:
             seen_jobs = set(json.load(f))
-    except
+    except:
+        pass
+
+def save_seen_jobs():
+    with open(SEEN_FILE, "w") as f:
+        json.dump(list(seen_jobs), f)
+
+# ===================== SCRAPER =====================
+def scrape_jobs(source_name: str, keyword: str, location: str) -> List[Dict]:
+   
