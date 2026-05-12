@@ -3,21 +3,18 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import quote_plus
 import time
-from datetime import date, datetime
-from typing import List, Dict
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+from datetime import date
 import json
 import os
+from typing import List, Dict
 
 st.set_page_config(page_title="Third Sector Job Finder", layout="wide")
 st.title("💼 Third Sector & Charity Job Finder + Alerts")
-st.success("✅ Scanner + Email Alerts Active")
+st.success("✅ Updated Version | GitHub Ready")
 
-# ===================== SESSION + PERSISTENCE =====================
+# ===================== SESSION STATE =====================
 if "keywords" not in st.session_state:
-    st.session_state.keywords = ["charity", "fundraising", "nonprofit", "trustee", "third sector"]
+    st.session_state.keywords = ["charity", "fundraising", "nonprofit", "trustee", "third sector", "safeguarding"]
 
 if "custom_sources" not in st.session_state:
     st.session_state.custom_sources = [
@@ -26,66 +23,32 @@ if "custom_sources" not in st.session_state:
         {"name": "Goodmoves", "base": "https://goodmoves.org", "active": True},
         {"name": "Guardian Charities", "base": "https://jobs.theguardian.com/jobs/charities", "active": True},
         {"name": "Reed", "base": "https://www.reed.co.uk", "active": True},
-        {"name": "Prospectus", "base": "https://www.prospect-us.co.uk", "active": False},
     ]
 
-# Load previously seen jobs (simple persistence)
+# Load seen jobs
 SEEN_FILE = "seen_jobs.json"
+seen_jobs = set()
 if os.path.exists(SEEN_FILE):
     try:
         with open(SEEN_FILE, "r") as f:
             seen_jobs = set(json.load(f))
     except:
-        seen_jobs = set()
-else:
-    seen_jobs = set()
+        pass
 
 def save_seen_jobs():
     with open(SEEN_FILE, "w") as f:
         json.dump(list(seen_jobs), f)
 
-# ===================== EMAIL SENDING =====================
-def send_email_alert(new_jobs: List[Dict], recipient: str):
-    if not recipient or not new_jobs:
-        return False
-    
-    try:
-        sender_email = st.secrets.get("EMAIL_ADDRESS") or "your_email@gmail.com"  # Use Streamlit secrets in production
-        password = st.secrets.get("EMAIL_PASSWORD") or None
-
-        msg = MIMEMultipart()
-        msg['From'] = sender_email
-        msg['To'] = recipient
-        msg['Subject'] = f"New Third Sector Jobs Found - {date.today()}"
-
-        body = f"<h2>{len(new_jobs)} New Jobs Found</h2><br>"
-        for job in new_jobs[:15]:
-            body += f"<strong>{job['title']}</strong> — {job['source']}<br>"
-            body += f"<a href='{job['link']}'>View Job</a><br><br>"
-
-        msg.attach(MIMEText(body, 'html'))
-
-        # Gmail example (use your own SMTP)
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(sender_email, password)
-        server.send_message(msg)
-        server.quit()
-        return True
-    except Exception as e:
-        st.error(f"Email failed: {e}")
-        return False
-
-# ===================== SCRAPERS (same as before) =====================
+# ===================== GENERIC SCRAPER =====================
 def scrape_generic(url: str, source_name: str) -> List[Dict]:
     try:
-        headers = {"User-Agent": "Mozilla/5.0"}
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         resp = requests.get(url, headers=headers, timeout=15)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
         
         jobs = []
-        for card in soup.select("article, div[class*='job'], li[class*='job'], div[class*='result']"):
+        for card in soup.select("article, div[class*='job'], li[class*='job'], div[class*='result'], div[class*='listing']"):
             link = card.find("a", href=True)
             if not link: 
                 continue
@@ -96,99 +59,90 @@ def scrape_generic(url: str, source_name: str) -> List[Dict]:
             full_link = link["href"]
             if not full_link.startswith("http"):
                 domain = "/".join(url.split("/")[:3])
-                full_link = domain + full_link if full_link.startswith("/") else domain + "/" + full_link
+                full_link = domain + (full_link if full_link.startswith("/") else "/" + full_link)
             
-            jobs.append({
-                "title": title,
-                "company": "Unknown",
-                "location": "",
-                "salary": "",
-                "link": full_link,
-                "source": source_name,
-                "found_date": str(date.today())
-            })
+            if full_link not in seen_jobs:
+                jobs.append({
+                    "title": title,
+                    "company": "Unknown",
+                    "link": full_link,
+                    "source": source_name
+                })
         return jobs[:25]
     except:
         return []
 
 # ===================== SIDEBAR =====================
 with st.sidebar:
-    st.header("⚙️ Alert Settings")
-    
-    email = st.text_input("Your Email Address", placeholder="you@example.com")
-    enable_alerts = st.toggle("Enable Daily Email Alerts", value=False)
-    
-    if enable_alerts and email:
-        st.success("✅ Alerts Enabled - Will scan and notify you")
-    elif enable_alerts and not email:
-        st.warning("Please enter your email")
+    st.header("🛠️ Settings")
+    email = st.text_input("Your Email for Alerts", placeholder="you@example.com")
+    enable_alerts = st.toggle("Enable Daily Email Alerts", value=True)
 
     st.subheader("Keywords")
-    # ... (keyword management same as before)
+    new_kw = st.text_input("Add Keyword", placeholder="e.g. policy officer", key="new_kw")
+    if st.button("➕ Add Keyword") and new_kw.strip():
+        kw = new_kw.strip().lower()
+        if kw not in st.session_state.keywords:
+            st.session_state.keywords.append(kw)
+            st.success(f"Added '{kw}'")
+            st.rerun()
+
+    for kw in st.session_state.keywords[:]:
+        col1, col2 = st.columns([4,1])
+        col1.write(f"• {kw}")
+        if col2.button("🗑️", key=f"delkw_{kw}"):
+            st.session_state.keywords.remove(kw)
+            st.rerun()
 
     st.subheader("Job Sources")
-    # ... (source management same as before)
+    for source in st.session_state.custom_sources[:]:
+        col1, col2 = st.columns([5,1])
+        source["active"] = col1.checkbox(source["name"], value=source.get("active", True))
+        if col2.button("🗑️", key=f"delsrc_{source['name']}"):
+            st.session_state.custom_sources.remove(source)
+            st.rerun()
+
+    with st.form("add_source_form"):
+        src_name = st.text_input("Source Name", placeholder="Indeed")
+        src_url = st.text_input("Base/Search URL", placeholder="https://uk.indeed.com/jobs?q=charity")
+        if st.form_submit_button("➕ Add Source") and src_name and src_url:
+            st.session_state.custom_sources.append({"name": src_name.strip(), "base": src_url.strip(), "active": True})
+            st.success(f"Added {src_name}")
+            st.rerun()
 
 # ===================== MAIN =====================
-st.subheader("🔍 Search & Alert System")
-col1, col2 = st.columns([3,1])
-with col1:
-    location = st.text_input("Location", "West Yorkshire")
-with col2:
-    max_results = st.slider("Max results", 10, 100, 30)
+st.subheader("🔍 Manual Search")
+col1, col2 = st.columns([3, 1])
+location = col1.text_input("Location", "West Yorkshire")
+max_results = col2.slider("Max results", 10, 100, 30)
 
-# Two action buttons
-col_a, col_b = st.columns(2)
-search_clicked = col_a.button("🔍 Search Now", type="primary", use_container_width=True)
-alert_clicked = col_b.button("📧 Check New Jobs & Send Alert", use_container_width=True)
-
-if search_clicked or alert_clicked:
-    with st.spinner("Scanning all active third sector job boards..."):
+if st.button("🔍 Search Now", type="primary", use_container_width=True):
+    with st.spinner("Scanning job boards..."):
         new_jobs = []
         active_sources = [s for s in st.session_state.custom_sources if s.get("active")]
 
-        progress_bar = st.progress(0)
-
-        for idx, source in enumerate(active_sources):
-            st.info(f"Scanning **{source['name']}**...")
-            
+        for source in active_sources:
+            st.info(f"Scanning **{source['name']}**")
             for kw in st.session_state.keywords:
-                search_url = source["base"]
+                url = source["base"]
+                if "charityjob" in url.lower():
+                    url = f"https://www.charityjob.co.uk/jobs/{quote_plus(kw)}/{quote_plus(location)}?sort=Date"
+                elif "thirdsector" in url.lower():
+                    url = f"https://jp.thirdsector.co.uk/jobs?keywords={quote_plus(kw)}"
                 
-                # Site-specific URL building
-                if "charityjob" in search_url.lower():
-                    search_url = f"https://www.charityjob.co.uk/jobs/{quote_plus(kw)}/{quote_plus(location)}?sort=Date"
-                elif "thirdsector" in search_url.lower():
-                    search_url = f"https://jp.thirdsector.co.uk/jobs?keywords={quote_plus(kw)}"
-                elif "goodmoves" in search_url.lower():
-                    search_url = f"https://goodmoves.org/search?keywords={quote_plus(kw)}"
-                elif "guardian" in search_url.lower():
-                    search_url = f"https://jobs.theguardian.com/jobs/charities/?keywords={quote_plus(kw)}"
-                
-                jobs = scrape_generic(search_url, source["name"])
-                
-                for job in jobs:
-                    if job["link"] not in seen_jobs:
-                        seen_jobs.add(job["link"])
-                        new_jobs.append(job)
+                jobs = scrape_generic(url, source["name"])
+                new_jobs.extend(jobs)
             
-            progress_bar.progress((idx + 1) / len(active_sources))
-            time.sleep(1.2)
+            time.sleep(1)
 
         save_seen_jobs()
-
+        
         if new_jobs:
-            st.success(f"🎉 Found **{len(new_jobs)} NEW jobs**!")
+            st.success(f"Found {len(new_jobs)} new jobs!")
             for job in new_jobs[:max_results]:
                 with st.expander(f"**{job['title']}** — {job['source']}"):
                     st.markdown(f"[🔗 View Job]({job['link']})")
-
-            # Send Email Alert
-            if alert_clicked and enable_alerts and email:
-                with st.spinner("Sending email alert..."):
-                    if send_email_alert(new_jobs, email):
-                        st.success(f"📧 Alert sent to {email}!")
         else:
-            st.info("No new jobs found since last scan.")
+            st.info("No new jobs found.")
 
-st.caption("The app remembers previously seen jobs. Click 'Check New Jobs & Send Alert' regularly or deploy with scheduler for true automation.")
+st.caption("Daily automatic scanning is handled by GitHub Actions → scanner.py")
