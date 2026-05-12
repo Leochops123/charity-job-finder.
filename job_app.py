@@ -31,31 +31,10 @@ def send_job_email(receiver_email: str, jobs: List[Dict], location: str):
         st.error("❌ Email credentials not set in Streamlit Secrets.")
         return False
 
+    # Build job list
     job_items = []
     for job in jobs[:20]:
         job_items.append(
             f"<li><strong>{job['title']}</strong><br>"
             f"{job['company']} • {job['source']}<br>"
-            f"<a href='{job['link']}'>View Job →</a></li>"
-        )
-
-    html = f"""
-    <html>
-    <body>
-        <h2>Charity Job Updates - {date.today()}</h2>
-        <p><strong>Location:</strong> {location}</p>
-        <p><strong>Found {len(jobs)} jobs</strong></p>
-        <ul>
-        {' '.join(job_items)}
-        </ul>
-        <p>Good luck with your applications!</p>
-        <hr>
-        <p style="font-size: 0.9em; color: #666;">Sent from your Charity Job Finder app.</p>
-    </body>
-    </html>
-    """
-
-    msg = MIMEMultipart("alternative")
-    msg['From'] = sender_email
-    msg['To'] = receiver_email
-    msg['Subject'] = f"New Charity Jobs
+            f"<a
