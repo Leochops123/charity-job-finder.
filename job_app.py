@@ -8,17 +8,17 @@ import os
 
 st.set_page_config(page_title="Third Sector Job Finder", layout="wide")
 st.title("💼 Third Sector & Charity Job Finder")
-st.success("✅ Clean & Working Version")
+st.success("✅ Clean Working Version")
 
-# Session State
+# ===================== SESSION STATE =====================
 if "keywords" not in st.session_state:
     st.session_state.keywords = ["fundraising", "manager", "officer"]
 
 if "location" not in st.session_state:
     st.session_state.location = "West Yorkshire"
 
-# Simple Scraper
-def scrape_jobs(keyword, location):
+# ===================== SCRAPER =====================
+def scrape_charityjob(keyword, location):
     try:
         url = "https://www.charityjob.co.uk/jobs?Keywords=" + quote_plus(keyword) + "&Sort=Date"
         if location and location.lower() not in ["any", "anywhere", ""]:
@@ -34,14 +34,5 @@ def scrape_jobs(keyword, location):
                 title = title_tag.get_text(strip=True)
                 link = title_tag["href"]
                 full_link = "https://www.charityjob.co.uk" + link if link.startswith("/") else link
-                jobs.append({"title": title, "link": full_link, "source": "CharityJob"})
-        return jobs[:20]
-    except:
-        return []
-
-# Sidebar
-with st.sidebar:
-    st.header("Filters")
-    st.subheader("Location")
-    new_loc = st.text_input("Preferred Location", value=st.session_state.location)
-    if new_loc
+                jobs.append({"title": title, "link": full_link, "source":
+                
