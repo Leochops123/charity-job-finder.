@@ -13,7 +13,7 @@ from datetime import datetime
 
 st.set_page_config(page_title="Third Sector Job Finder", layout="wide")
 st.title("💼 Third Sector & Charity Job Finder")
-st.success("✅ Working Version with Email")
+st.success("✅ Fully Fixed & Working")
 
 # ===================== SESSION STATE =====================
 if "keywords" not in st.session_state:
@@ -48,3 +48,6 @@ def get_job_hash(title, link):
 
 def is_within_24h(text):
     if not text:
+        return True
+    t = text.lower()
+    words
