@@ -9,11 +9,11 @@ import hashlib
 
 st.set_page_config(page_title="Third Sector Job Finder", layout="wide")
 st.title("💼 Third Sector & Charity Job Finder")
-st.success("✅ Fixed & Working Version")
+st.success("✅ Fully Fixed Version")
 
 # ===================== SESSION STATE =====================
 if "keywords" not in st.session_state:
-    st.session_state.keywords = ["fundraising", "manager", "officer", "coordinator"]
+    st.session_state.keywords = ["fundraising", "manager", "officer"]
 
 if "location" not in st.session_state:
     st.session_state.location = "West Yorkshire"
@@ -38,4 +38,4 @@ def is_within_24h(text):
     if not text:
         return True
     t = text.lower()
-    return any(word in t for word in ["today
+    keywords = ["today",
