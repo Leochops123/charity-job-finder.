@@ -129,4 +129,92 @@ def scrape_thirdsector(keyword: str) -> List[Dict]:
         jobs = []
         for card in soup.select("article, div.job, div[class*='job']"):
             title_tag = card.select_one("a[href*='/job']")
-            if title
+            if title_tag:
+                title = title_tag.get_text(strip=True)
+                if len(title) < 15: 
+                    continue
+                link = title_tag["href"]
+                full_link = "https://jobs.thirdsector.co.uk" + link if link.startswith("/") else link
+
+                if is_within_24h(card.get_text()):
+                    jobs.append({
+                        "title": title,
+                        "link": full_link,
+                        "source": "Third Sector",
+                        "salary": "See posting",
+                        "location": "UK"
+                    })
+        return jobs[:20]
+    except Exception as e:
+        st.error(f"Third Sector failed: {e}")
+        return []
+
+# ===================== EMAIL (simplified) =====================
+def send_email_alert(jobs):
+    # ... keep the same function from previous version
+    pass  # Replace with your email function if needed
+
+# ===================== SIDEBAR =====================
+with st.sidebar:
+    st.header("Filters")
+    new_loc = st.text_input("Location", value=st.session_state.location)
+    if new_loc != st.session_state.location:
+        st.session_state.location = new_loc
+
+    st.subheader("Keywords")
+    new_kw = st.text_input("Add Keyword")
+    if st.button("Add") and new_kw:
+        kw = new_kw.strip().lower()
+        if kw not in st.session_state.keywords:
+            st.session_state.keywords.append(kw)
+            st.rerun()
+
+    for kw in list(st.session_state.keywords):
+        col1, col2 = st.columns([4,1])
+        col1.write(kw)
+        if col2.button("Delete", key=f"del{kw}"):
+            st.session_state.keywords.remove(kw)
+            st.rerun()
+
+    st.subheader("Sources")
+    for idx, s in enumerate(st.session_state.custom_sources):
+        s["active"] = st.checkbox(s["name"], value=s.get("active", True), key=f"chk{idx}")
+
+# ===================== MAIN =====================
+if st.button("🔍 Search Last 24 Hours", type="primary", use_container_width=True):
+    with st.spinner("Searching..."):
+        all_jobs = []
+        active_sources = [s for s in st.session_state.custom_sources if s.get("active")]
+
+        for source in active_sources:
+            st.write(f"Scanning **{source['name']}**...")
+            for kw in st.session_state.keywords:
+                if source["name"] == "CharityJob":
+                    jobs = scrape_charityjob(kw, st.session_state.location)
+                elif source["name"] == "Indeed":
+                    jobs = scrape_indeed(kw, st.session_state.location)
+                elif source["name"] == "Third Sector":
+                    jobs = scrape_thirdsector(kw)
+                else:
+                    jobs = []
+                all_jobs.extend(jobs)
+                time.sleep(1)
+
+        # Deduplicate
+        unique_jobs = [j for j in all_jobs if get_job_hash(j["title"], j["link"]) not in seen_jobs]
+
+        for j in unique_jobs:
+            seen_jobs.add(get_job_hash(j["title"], j["link"]))
+
+        save_seen_jobs()
+
+        if unique_jobs:
+            st.success(f"Found {len(unique_jobs)} new jobs!")
+            for job in unique_jobs[:50]:
+                with st.expander(f"{job['title']} — {job['source']}"):
+                    st.markdown(f"[View Job]({job['link']})")
+        else:
+            st.warning("No jobs found. Try these tips:")
+            st.info("• Try location = 'Any' or leave blank\n• Use broad keywords like 'fundraising' or 'manager'")
+
+st.caption("If still no jobs, the sites may be blocking the request or have changed structure.")
