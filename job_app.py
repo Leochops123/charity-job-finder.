@@ -56,4 +56,30 @@ def scrape_charityjob(keyword: str, location: str) -> List[Dict]:
             url += f"&Location={quote_plus(location)}"
         
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        resp = requests.get(url,
+        resp = requests.get(url, headers=headers, timeout=12)
+        soup = BeautifulSoup(resp.text, "html.parser")
+        
+        jobs = []
+        for card in soup.select("div.job-result, article"):
+            title_tag = card.select_one("a[href*='/jobs/']")
+            if not title_tag: 
+                continue
+            title = title_tag.get_text(strip=True)
+            if len(title) < 15: 
+                continue
+
+            link = title_tag["href"]
+            full_link = "https://www.charityjob.co.uk" + link if link.startswith("/") else link
+
+            if not is_within_24h(card.get_text()[:400]): 
+                continue
+
+            job_hash = get_job_hash(title, full_link)
+            if job_hash not in seen_jobs:
+                jobs.append({"title": title, "link": full_link, "source": "CharityJob"})
+        return jobs[:25]
+    except Exception as e:
+        st.error(f"CharityJob error: {e}")
+        return []
+
+...
