@@ -31,4 +31,26 @@ if "custom_sources" not in st.session_state:
         {"name": "Totaljobs", "active": True},
     ]
 
-if "smtp_settings" not in st.session_state
+if "smtp_settings" not in st.session_state:
+    st.session_state.smtp_settings = {
+        "enabled": False,
+        "sender_email": "",
+        "app_password": "",
+        "recipient_email": ""
+    }
+
+SEEN_FILE = "seen_jobs.json"
+seen_jobs: set = set()
+if os.path.exists(SEEN_FILE):
+    try:
+        with open(SEEN_FILE, "r") as f:
+            seen_jobs = set(json.load(f))
+    except:
+        pass
+
+def save_seen_jobs():
+    with open(SEEN_FILE, "w") as f:
+        json.dump(list(seen_jobs), f)
+
+def get_job_hash(title: str, link: str) -> str:
+    return hashlib.md5(f
