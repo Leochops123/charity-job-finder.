@@ -13,11 +13,11 @@ from datetime import datetime
 
 st.set_page_config(page_title="Third Sector Job Finder", layout="wide")
 st.title("💼 Third Sector & Charity Job Finder")
-st.success("✅ CharityJob Focus • Email Alerts Added")
+st.success("✅ Working Version with Email")
 
 # ===================== SESSION STATE =====================
 if "keywords" not in st.session_state:
-    st.session_state.keywords = ["fundraising", "manager", "officer", "coordinator", "safeguarding"]
+    st.session_state.keywords = ["fundraising", "manager", "officer", "coordinator"]
 
 if "location" not in st.session_state:
     st.session_state.location = "West Yorkshire"
@@ -44,4 +44,7 @@ def save_seen_jobs():
         json.dump(list(seen_jobs), f)
 
 def get_job_hash(title, link):
-    return hashlib.md5
+    return hashlib.md5((title.lower().strip() + link).encode()).hexdigest()
+
+def is_within_24h(text):
+    if not text:
