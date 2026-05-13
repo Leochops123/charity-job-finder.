@@ -9,9 +9,9 @@ import hashlib
 
 st.set_page_config(page_title="Third Sector Job Finder", layout="wide")
 st.title("💼 Third Sector & Charity Job Finder")
-st.success("✅ Fixed Working Version")
+st.success("✅ Fully Fixed & Clean Version")
 
-# Session State
+# ===================== SESSION STATE =====================
 if "keywords" not in st.session_state:
     st.session_state.keywords = ["fundraising", "manager", "officer"]
 
@@ -44,7 +44,7 @@ def is_within_24h(text):
             return True
     return False
 
-# Scraper
+# ===================== SCRAPER =====================
 def scrape_charityjob(keyword, location):
     try:
         url = "https://www.charityjob.co.uk/jobs?Keywords=" + quote_plus(keyword) + "&Sort=Date"
@@ -69,7 +69,7 @@ def scrape_charityjob(keyword, location):
     except:
         return []
 
-# Sidebar
+# ===================== SIDEBAR =====================
 with st.sidebar:
     st.header("Filters")
     st.subheader("Location")
@@ -92,8 +92,8 @@ with st.sidebar:
             st.session_state.keywords.remove(kw)
             st.rerun()
 
-# Main
-st.subheader("Search Last 24 Hours")
+# ===================== MAIN =====================
+st.subheader("Search Last 24 Hours Jobs")
 
 if st.button("🔍 Search Last 24 Hours", type="primary", use_container_width=True):
     with st.spinner("Searching..."):
@@ -103,6 +103,7 @@ if st.button("🔍 Search Last 24 Hours", type="primary", use_container_width=Tr
             all_jobs.extend(jobs)
             time.sleep(1)
 
+        # Deduplicate
         unique_jobs = []
         for job in all_jobs:
             if get_job_hash(job["title"], job["link"]) not in seen_jobs:
@@ -112,5 +113,12 @@ if st.button("🔍 Search Last 24 Hours", type="primary", use_container_width=Tr
         save_seen_jobs()
 
         if unique_jobs:
-            st.success("Found " + str(len(unique_jobs)) + " jobs!")
-            for job in unique_jobs[:
+            st.success("Found " + str(len(unique_jobs)) + " new jobs!")
+            for job in unique_jobs[:50]:
+                with st.expander(job["title"]):
+                    st.markdown("[View Job](" + job["link"] + ")")
+                    st.caption(job["source"])
+        else:
+            st.info("No new jobs found. Try Location = Any")
+
+st.caption("✅ All errors fixed - Clean Version")
