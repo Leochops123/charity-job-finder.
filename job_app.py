@@ -3,120 +3,68 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import quote_plus
 import time
-from datetime import datetime
 
 st.set_page_config(page_title="Third Sector Job Finder", layout="wide")
 st.title("💼 Third Sector & Charity Job Finder")
-st.success("✅ Fully Fixed & Working")
+st.success("✅ Ultra Clean Version")
 
-# Session State
-if "positive_keywords" not in st.session_state:
-    st.session_state.positive_keywords = ["fundraising", "manager", "officer", "coordinator", "fundraiser"]
-if "negative_keywords" not in st.session_state:
-    st.session_state.negative_keywords = ["senior", "director", "head of", "intern", "volunteer"]
+if "keywords" not in st.session_state:
+    st.session_state.keywords = ["fundraising", "manager", "officer"]
+
 if "location" not in st.session_state:
     st.session_state.location = "West Yorkshire"
 
-# Sidebar Settings
-with st.sidebar:
-    st.header("⚙️ Settings")
-    pos_input = st.text_input("Positive Keywords (comma separated)", 
-                             ", ".join(st.session_state.positive_keywords))
-    neg_input = st.text_input("Keywords to Exclude", 
-                             ", ".join(st.session_state.negative_keywords))
-    loc_input = st.text_input("Location", st.session_state.location)
-    
-    if st.button("💾 Save Settings"):
-        st.session_state.positive_keywords = [k.strip() for k in pos_input.split(",") if k.strip()]
-        st.session_state.negative_keywords = [k.strip() for k in neg_input.split(",") if k.strip()]
-        st.session_state.location = loc_input
-        st.success("Settings Saved!")
-
-# Updated Scraper
 def scrape_charityjob(keyword, location):
     try:
-        url = f"https://www.charityjob.co.uk/jobs?Keywords={quote_plus(keyword)}&Sort=Date"
-        if location and location.lower() not in ["any", "anywhere"]:
-            url += f"&Location={quote_plus(location)}"
+        url = "https://www.charityjob.co.uk/jobs?Keywords=" + quote_plus(keyword) + "&Sort=Date"
+        if location and location.lower() not in ["any", "anywhere", ""]:
+            url = url + "&Location=" + quote_plus(location)
         
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        }
-        
-        resp = requests.get(url, headers=headers, timeout=20)
+        resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
         soup = BeautifulSoup(resp.text, "html.parser")
         
         jobs = []
-        # Stronger selector for current site
-        job_links = soup.select("a[href*='/jobs/']")
-        
-        for link in job_links:
-            title = link.get_text(strip=True)
-            if len(title) < 10 or "Top job" in title or title.startswith("["):
-                continue
-                
-            href = link["href"]
-            full_link = "https://www.charityjob.co.uk" + href if href.startswith("/") else href
-            
-            # Get company and details from nearby text
-            parent = link.find_parent("div") or link.find_parent("article")
-            context = parent.get_text(strip=True) if parent else ""
-            
-            # Extract company roughly
-            company = "Unknown"
-            if "£" in context or "per year" in context:
-                lines = context.split("\n")
-                for line in lines:
-                    if len(line) > 5 and not any(x in line for x in ["Posted", "£", "today"]):
-                        company = line[:100]
-                        break
-            
-            jobs.append({
-                "title": title,
-                "link": full_link,
-                "company": company,
-                "source": "CharityJob"
-            })
-        
-        return jobs[:30]
-    except Exception as e:
-        st.error(f"Error: {e}")
+        for card in soup.select("article, div.job-result"):
+            title_tag = card.select_one("a[href*='/jobs/']")
+            if title_tag:
+                title = title_tag.get_text(strip=True)
+                if len(title) >= 15:
+                    link = title_tag["href"]
+                    full_link = "https://www.charityjob.co.uk" + link if link.startswith("/") else link
+                    jobs.append({"title": title, "link": full_link, "source": "CharityJob"})
+        return jobs[:25]
+    except:
         return []
 
-def should_include(title):
-    t = title.lower()
-    if not any(k.lower() in t for k in st.session_state.positive_keywords):
-        return False
-    if any(k.lower() in t for k in st.session_state.negative_keywords):
-        return False
-    return True
+with st.sidebar:
+    st.header("Filters")
+    new_loc = st.text_input("Location", value=st.session_state.location)
+    if new_loc != st.session_state.location:
+        st.session_state.location = new_loc
 
-# Main Search Button
-if st.button("🔍 Search Jobs Now", type="primary", use_container_width=True):
-    with st.spinner("Searching on CharityJob..."):
+    new_kw = st.text_input("Add Keyword")
+    if st.button("Add Keyword") and new_kw.strip():
+        kw = new_kw.strip().lower()
+        if kw not in st.session_state.keywords:
+            st.session_state.keywords.append(kw)
+            st.rerun()
+
+st.subheader(f"Jobs in {st.session_state.location}")
+
+if st.button("🔍 Search Last 24 Hours", type="primary", use_container_width=True):
+    with st.spinner("Searching..."):
         all_jobs = []
-        for kw in st.session_state.positive_keywords[:5]:
+        for kw in st.session_state.keywords:
             jobs = scrape_charityjob(kw, st.session_state.location)
-            for job in jobs:
-                if should_include(job["title"]):
-                    all_jobs.append(job)
-            time.sleep(1.2)  # Be gentle
+            all_jobs.extend(jobs)
+            time.sleep(1)
         
-        # Remove duplicates
-        seen = set()
-        unique_jobs = []
-        for job in all_jobs:
-            if job["link"] not in seen:
-                seen.add(job["link"])
-                unique_jobs.append(job)
-        
-        if unique_jobs:
-            st.success(f"✅ Found {len(unique_jobs)} matching jobs")
-            for job in unique_jobs[:20]:
-                with st.container(border=True):
-                    st.markdown(f"**[{job['title']}]({job['link']})**")
-                    st.caption(f"🏢 {job['company']} • {job['source']}")
+        if all_jobs:
+            st.success(f"Found {len(all_jobs)} jobs")
+            for job in all_jobs[:30]:
+                with st.expander(job["title"]):
+                    st.markdown("[View Job](" + job["link"] + ")")
         else:
-            st.warning("No matching jobs found. Try changing keywords or location.")
+            st.info("No jobs found. Try location = Any")
 
-st.caption("Tip: Try broad positive keywords like 'fundraising' or 'manager'")
+st.caption("Clean version")
