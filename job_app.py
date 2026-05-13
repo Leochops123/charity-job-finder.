@@ -9,7 +9,7 @@ import hashlib
 
 st.set_page_config(page_title="Third Sector Job Finder", layout="wide")
 st.title("💼 Third Sector & Charity Job Finder")
-st.success("✅ Working Version - All Sources")
+st.success("✅ Fixed & Working Version")
 
 # ===================== SESSION STATE =====================
 if "keywords" not in st.session_state:
@@ -17,15 +17,6 @@ if "keywords" not in st.session_state:
 
 if "location" not in st.session_state:
     st.session_state.location = "West Yorkshire"
-
-if "custom_sources" not in st.session_state:
-    st.session_state.custom_sources = [
-        {"name": "CharityJob", "active": True},
-        {"name": "Indeed", "active": True},
-        {"name": "Third Sector", "active": True},
-        {"name": "Guardian", "active": True},
-        {"name": "Totaljobs", "active": True}
-    ]
 
 SEEN_FILE = "seen_jobs.json"
 seen_jobs = set()
@@ -41,17 +32,10 @@ def save_seen_jobs():
         json.dump(list(seen_jobs), f)
 
 def get_job_hash(title, link):
-    return hashlib.md5(f"{title.lower().strip()}{link}".encode()).hexdigest()
+    return hashlib.md5((title.lower().strip() + link).encode()).hexdigest()
 
 def is_within_24h(text):
     if not text:
         return True
     t = text.lower()
-    return any(word in t for word in ["today", "1 day ago", "hours ago", "just posted"])
-
-# ===================== CHARITYJOB SCRAPER =====================
-def scrape_charityjob(keyword, location):
-    try:
-        url = f"https://www.charityjob.co.uk/jobs?Keywords={quote_plus(keyword)}&Sort=Date"
-        if location and location.lower() not in ["any", "anywhere", ""]:
-            url += f"&Location
+    return any(word in t for word in ["today
