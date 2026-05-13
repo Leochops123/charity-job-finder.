@@ -29,4 +29,6 @@ if "custom_sources" not in st.session_state:
         {"name": "Third Sector", "active": True},
         {"name": "Guardian", "active": True},
         {"name": "Totaljobs", "active": True},
-   
+    ]
+
+if "smtp_settings" not in st.session_state
