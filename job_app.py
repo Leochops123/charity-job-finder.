@@ -8,7 +8,7 @@ import os
 
 st.set_page_config(page_title="Third Sector Job Finder", layout="wide")
 st.title("💼 Third Sector & Charity Job Finder")
-st.success("✅ Debug Version Active")
+st.success("✅ Clean & Working Version")
 
 # Session State
 if "keywords" not in st.session_state:
@@ -17,42 +17,31 @@ if "keywords" not in st.session_state:
 if "location" not in st.session_state:
     st.session_state.location = "West Yorkshire"
 
-SEEN_FILE = "seen_jobs.json"
-seen_jobs = set()
-if os.path.exists(SEEN_FILE):
-    try:
-        with open(SEEN_FILE, "r") as f:
-            seen_jobs = set(json.load(f))
-    except:
-        pass
-
-def get_job_hash(title, link):
-    return hashlib.md5((title.lower().strip() + link).encode()).hexdigest()
-
-# ===================== IMPROVED SCRAPER WITH DEBUG =====================
-def scrape_charityjob(keyword, location):
-    st.info(f"Searching for: **{keyword}** in **{location}**")
+# Simple Scraper
+def scrape_jobs(keyword, location):
     try:
         url = "https://www.charityjob.co.uk/jobs?Keywords=" + quote_plus(keyword) + "&Sort=Date"
         if location and location.lower() not in ["any", "anywhere", ""]:
             url += "&Location=" + quote_plus(location)
         
-        st.write("URL:", url)
-        
-        resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
-        st.write("Status Code:", resp.status_code)
-        
+        resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
         soup = BeautifulSoup(resp.text, "html.parser")
         
         jobs = []
-        selectors = ["article", "div.job-result", "div[class*='job']", "div[data-testid]"]
-        
-        for selector in selectors:
-            cards = soup.select(selector)
-            st.write(f"Found {len(cards)} cards with selector: {selector}")
-            
-            for card in cards[:10]:   # limit for debug
-                title_tag = card.select_one("a[href*='/jobs/']")
-                if title_tag:
-                    title = title_tag.get_text(strip=True)
-                    if len(title) > 15
+        for card in soup.select("article, div.job-result"):
+            title_tag = card.select_one("a[href*='/jobs/']")
+            if title_tag and len(title_tag.get_text(strip=True)) >= 15:
+                title = title_tag.get_text(strip=True)
+                link = title_tag["href"]
+                full_link = "https://www.charityjob.co.uk" + link if link.startswith("/") else link
+                jobs.append({"title": title, "link": full_link, "source": "CharityJob"})
+        return jobs[:20]
+    except:
+        return []
+
+# Sidebar
+with st.sidebar:
+    st.header("Filters")
+    st.subheader("Location")
+    new_loc = st.text_input("Preferred Location", value=st.session_state.location)
+    if new_loc
