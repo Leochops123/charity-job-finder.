@@ -13,7 +13,7 @@ from typing import List, Dict
 
 st.set_page_config(page_title="Third Sector Job Finder", layout="wide")
 st.title("💼 Third Sector & Charity Job Finder")
-st.success("✅ Multi-Source • Last 24 Hours • Smart Filters")
+st.success("✅ CharityJob + Indeed + Third Sector • Last 24 Hours")
 
 # ===================== SESSION STATE =====================
 if "keywords" not in st.session_state:
@@ -24,10 +24,16 @@ if "location" not in st.session_state:
 
 if "custom_sources" not in st.session_state:
     st.session_state.custom_sources = [
-        {"name": "CharityJob", "base": "https://www.charityjob.co.uk", "active": True},
-        {"name": "Indeed", "base": "https://uk.indeed.com", "active": True},
-        {"name": "Third Sector", "base": "https://jobs.thirdsector.co.uk", "active": True},
+        {"name": "CharityJob", "active": True},
+        {"name": "Indeed", "active": True},
+        {"name": "Third Sector", "active": True},
     ]
+
+# Email Settings
+if "smtp_settings" not in st.session_state:
+    st.session_state.smtp_settings = {
+        "sender_email": "", "app_password": "", "recipient_email": "", "enabled": False
+    }
 
 SEEN_FILE = "seen_jobs.json"
 seen_jobs: set = set()
@@ -53,7 +59,7 @@ def is_within_24h(text: str) -> bool:
               "2 hour", "posted 1 day", "new today"]
     return any(k in t for k in recent)
 
-# ===================== SCRAPERS =====================
+# ===================== FULL SCRAPERS =====================
 def scrape_charityjob(keyword: str, location: str) -> List[Dict]:
     try:
         url = f"https://www.charityjob.co.uk/jobs?Keywords={quote_plus(keyword)}&Sort=Date"
@@ -68,25 +74,20 @@ def scrape_charityjob(keyword: str, location: str) -> List[Dict]:
             title_tag = card.select_one("a[href*='/jobs/']")
             if not title_tag or len(title_tag.get_text(strip=True)) < 15:
                 continue
-
             title = title_tag.get_text(strip=True)
             link = title_tag["href"]
             full_link = "https://www.charityjob.co.uk" + link if link.startswith("/") else link
 
-            card_text = card.get_text()
-            if not is_within_24h(card_text):
+            if not is_within_24h(card.get_text()):
                 continue
 
-            # Extract salary & location if available
-            salary = next((t.strip() for t in card_text.split() if "£" in t), "Not listed")
-            loc = location or "UK"
-
-            job_hash = get_job_hash(title, full_link)
-            if job_hash not in seen_jobs:
-                jobs.append({
-                    "title": title, "link": full_link, "source": "CharityJob",
-                    "salary": salary, "location": loc
-                })
+            jobs.append({
+                "title": title, 
+                "link": full_link, 
+                "source": "CharityJob",
+                "salary": "Not listed", 
+                "location": location
+            })
         return jobs[:25]
     except:
         return []
@@ -100,22 +101,25 @@ def scrape_indeed(keyword: str, location: str) -> List[Dict]:
         jobs = []
         for card in soup.select("div.job_seen_beacon"):
             title_tag = card.select_one("h2 a")
-            if not title_tag: continue
+            if not title_tag:
+                continue
             title = title_tag.get_text(strip=True)
-            link = "https://uk.indeed.com" + title_tag.get("href", "")
+            link = title_tag.get("href", "")
+            full_link = "https://uk.indeed.com" + link if link.startswith("/") else link
 
             if not is_within_24h(card.get_text()[:400]):
                 continue
 
-            salary = card.select_one("div[class*='salary']")
-            salary_text = salary.get_text(strip=True) if salary else "Not listed"
+            salary_tag = card.select_one("div[class*='salary'], span[class*='salary']")
+            salary = salary_tag.get_text(strip=True) if salary_tag else "Not listed"
 
-            job_hash = get_job_hash(title, link)
-            if job_hash not in seen_jobs:
-                jobs.append({
-                    "title": title, "link": link, "source": "Indeed",
-                    "salary": salary_text, "location": location
-                })
+            jobs.append({
+                "title": title, 
+                "link": full_link, 
+                "source": "Indeed",
+                "salary": salary, 
+                "location": location
+            })
         return jobs[:20]
     except:
         return []
@@ -123,67 +127,72 @@ def scrape_indeed(keyword: str, location: str) -> List[Dict]:
 def scrape_thirdsector(keyword: str) -> List[Dict]:
     try:
         url = f"https://jobs.thirdsector.co.uk/jobs?keywords={quote_plus(keyword)}"
-        resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+        resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=12)
         soup = BeautifulSoup(resp.text, "html.parser")
         
         jobs = []
-        for card in soup.select("article, div.job"):
+        for card in soup.select("article, div.job-card, div.job"):
             title_tag = card.select_one("a[href*='/job']")
             if not title_tag or len(title_tag.get_text(strip=True)) < 15:
                 continue
             title = title_tag.get_text(strip=True)
-            link = "https://jobs.thirdsector.co.uk" + title_tag["href"] if title_tag["href"].startswith("/") else title_tag["href"]
+            link = title_tag["href"]
+            full_link = "https://jobs.thirdsector.co.uk" + link if link.startswith("/") else link
 
             if not is_within_24h(card.get_text()):
                 continue
 
-            job_hash = get_job_hash(title, link)
-            if job_hash not in seen_jobs:
-                jobs.append({
-                    "title": title, "link": link, "source": "Third Sector",
-                    "salary": "Not listed", "location": "UK"
-                })
+            jobs.append({
+                "title": title, 
+                "link": full_link, 
+                "source": "Third Sector",
+                "salary": "Not listed", 
+                "location": "UK"
+            })
         return jobs[:20]
     except:
         return []
 
-# ===================== EMAIL ALERTS =====================
-def send_email_alert(jobs: List[Dict], email: str):
-    if not jobs or not email:
+# ===================== EMAIL FUNCTION =====================
+def send_email_alert(jobs: List[Dict]):
+    settings = st.session_state.smtp_settings
+    if not settings["enabled"] or not settings["sender_email"] or not settings["app_password"] or not jobs:
         return
+
+    recipient = settings.get("recipient_email") or settings["sender_email"]
     try:
         msg = MIMEMultipart()
-        msg['Subject'] = f"New Charity Jobs Found - {len(jobs)} opportunities"
-        msg['From'] = "yourapp@example.com"
-        msg['To'] = email
+        msg['Subject'] = f"New Charity Jobs Found - {len(jobs)}"
+        msg['From'] = settings["sender_email"]
+        msg['To'] = recipient
 
-        body = "Here are the newest jobs:\n\n"
-        for job in jobs[:10]:
-            body += f"• {job['title']}\n  {job['link']}\n\n"
+        body = f"<h3>Found {len(jobs)} new jobs in last 24 hours</h3><ul>"
+        for job in jobs[:15]:
+            body += f"<li><b>{job['title']}</b><br>{job.get('salary','')} | {job.get('location','')}<br>"
+            body += f"<a href='{job['link']}'>View Job →</a></li><br>"
+        body += "</ul>"
 
-        msg.attach(MIMEText(body, 'plain'))
+        msg.attach(MIMEText(body, 'html'))
 
-        # Configure your SMTP settings here (Gmail example)
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-            server.login("your-email@gmail.com", "your-app-password")
+            server.login(settings["sender_email"], settings["app_password"])
             server.send_message(msg)
-        st.success("Email alert sent!")
+        st.success(f"📧 Email sent to {recipient}")
     except Exception as e:
-        st.warning(f"Could not send email: {e}")
+        st.error(f"Email error: {e}")
 
 # ===================== SIDEBAR =====================
 with st.sidebar:
     st.header("🛠️ Filters & Settings")
-    
-    # Location
+
     st.subheader("📍 Location")
     new_loc = st.text_input("Preferred Location", value=st.session_state.location, key="loc_input")
     if new_loc != st.session_state.location:
         st.session_state.location = new_loc
 
     st.subheader("🔑 Keywords")
-    new_kw = st.text_input("Add Keyword", placeholder="e.g. grant manager")
-    if st.button("➕ Add Keyword") and new_kw.strip():
+    new_kw = st.text_input("Add Keyword", placeholder="e.g. grant manager", key="new_kw")
+    if st.button("➕ Add") and new_kw.strip():
         kw = new_kw.strip().lower()
         if kw not in st.session_state.keywords:
             st.session_state.keywords.append(kw)
@@ -196,7 +205,7 @@ with st.sidebar:
             st.session_state.keywords.remove(kw)
             st.rerun()
 
-    st.subheader("📌 Active Sources")
+    st.subheader("📌 Job Sources")
     for idx, source in enumerate(st.session_state.custom_sources):
         col1, col2 = st.columns([5,1])
         source["active"] = col1.checkbox(source["name"], value=source.get("active", True), key=f"src_{idx}")
@@ -205,22 +214,24 @@ with st.sidebar:
             st.rerun()
 
     st.subheader("📧 Email Alerts")
-    alert_email = st.text_input("Your Email", placeholder="you@example.com", key="alert_email")
-    enable_alerts = st.toggle("Send Email Alert on New Jobs", value=True)
+    st.session_state.smtp_settings["enabled"] = st.toggle("Enable Email Alerts", value=st.session_state.smtp_settings["enabled"])
+    st.text_input("Sender Gmail", key="sender_email", value=st.session_state.smtp_settings["sender_email"])
+    st.text_input("Gmail App Password", key="app_password", value=st.session_state.smtp_settings["app_password"], type="password")
+    st.text_input("Recipient Email (optional)", key="recipient_email", value=st.session_state.smtp_settings["recipient_email"])
 
-# ===================== MAIN APP =====================
-st.subheader(f"🔍 Recent Jobs in **{st.session_state.location}**")
+# ===================== MAIN =====================
+st.subheader(f"🔍 Search Recent Jobs in **{st.session_state.location}**")
 
 if st.button("🔍 Search Last 24 Hours", type="primary", use_container_width=True):
-    with st.spinner("Searching across sources..."):
+    with st.spinner("Searching CharityJob, Indeed & Third Sector..."):
         all_jobs = []
         active_sources = [s for s in st.session_state.custom_sources if s.get("active")]
-        
+
         progress_bar = st.progress(0)
-        total = len(active_sources) * len(st.session_state.keywords)
 
         for i, source in enumerate(active_sources):
-            for kw in st.session_state.keywords:
+            st.info(f"🔎 Scanning **{source['name']}**...")
+            for kw in st.session_state.keywords[:8]:
                 if source["name"] == "CharityJob":
                     jobs = scrape_charityjob(kw, st.session_state.location)
                 elif source["name"] == "Indeed":
@@ -231,9 +242,9 @@ if st.button("🔍 Search Last 24 Hours", type="primary", use_container_width=Tr
                     jobs = []
                 
                 all_jobs.extend(jobs)
-                time.sleep(0.9)
-
-            progress_bar.progress((i+1) / len(active_sources))
+                time.sleep(1.0)
+            
+            progress_bar.progress((i + 1) / len(active_sources) if active_sources else 1)
 
         # Deduplicate
         unique_jobs = []
@@ -247,15 +258,14 @@ if st.button("🔍 Search Last 24 Hours", type="primary", use_container_width=Tr
 
         if unique_jobs:
             st.success(f"🎉 Found **{len(unique_jobs)}** new jobs!")
-            
-            for job in unique_jobs[:50]:
+            for job in unique_jobs[:60]:
                 with st.expander(f"**{job['title']}** — {job['source']}"):
                     st.markdown(f"[🔗 View Job]({job['link']})")
                     st.caption(f"Salary: {job.get('salary', 'N/A')} | Location: {job.get('location', 'N/A')}")
-
-            if enable_alerts and alert_email:
-                send_email_alert(unique_jobs, alert_email)
+            
+            if st.session_state.smtp_settings["enabled"]:
+                send_email_alert(unique_jobs)
         else:
             st.info("No new jobs found in the last 24 hours.")
 
-st.caption("Jobs are automatically marked as seen • Respectful scraping with delays")
+st.caption("All sources are now active • Use Gmail App Password for emails")
