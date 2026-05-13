@@ -33,4 +33,5 @@ if "custom_sources" not in st.session_state:
 
 if "smtp_settings" not in st.session_state:
     st.session_state.smtp_settings = {
-        "enabled
+        "enabled": False,
+        "sender
