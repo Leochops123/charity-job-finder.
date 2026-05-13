@@ -21,16 +21,13 @@ if "sources" not in st.session_state:
 with st.sidebar:
     st.header("⚙️ Settings")
     
-    # Keywords
     pos_input = st.text_input("Search Keywords (comma separated)", 
                              ", ".join(st.session_state.positive_keywords))
     
-    # Location
     loc_input = st.text_input("Location", st.session_state.location)
     
     st.divider()
     
-    # Email Settings
     st.subheader("📧 Email Alerts")
     email_from = st.text_input("Your Email", "")
     email_password = st.text_input("App Password (Gmail)", type="password")
@@ -38,7 +35,6 @@ with st.sidebar:
     
     st.divider()
     
-    # Sources
     st.subheader("📌 Job Sources")
     selected_sources = st.multiselect("Active Sources", 
                                      ["CharityJob", "ThirdSector", "Prospects"], 
@@ -72,3 +68,50 @@ def scrape_charityjob(keyword, location):
             title = tag.get_text(strip=True)
             if len(title) < 12:
                 continue
+            href = tag["href"]
+            full_link = "https://www.charityjob.co.uk" + href if href.startswith("/") else href
+            
+            parent = tag.find_parent(["div", "article"])
+            company = parent.get_text(strip=True)[:120] if parent else "Unknown"
+            
+            jobs.append({
+                "title": title,
+                "link": full_link,
+                "company": company,
+                "source": "CharityJob"
+            })
+        return jobs[:25]
+    except Exception:
+        return []
+
+def should_include(title):
+    t = title.lower()
+    return any(k.lower() in t for k in st.session_state.positive_keywords)
+
+# ===================== MAIN APP =====================
+if st.button("🔍 Search Jobs Now", type="primary", use_container_width=True):
+    with st.spinner("Searching across sources..."):
+        all_jobs = []
+        
+        for kw in st.session_state.positive_keywords[:6]:
+            if "CharityJob" in st.session_state.sources:
+                jobs = scrape_charityjob(kw, st.session_state.location)
+                for job in jobs:
+                    if should_include(job["title"]):
+                        all_jobs.append(job)
+                time.sleep(1.3)
+
+        # Remove duplicates
+        seen = set()
+        unique_jobs = []
+        for job in all_jobs:
+            if job["link"] not in seen:
+                seen.add(job["link"])
+                unique_jobs.append(job)
+        
+        if unique_jobs:
+            st.success(f"✅ Found {len(unique_jobs)} matching jobs")
+            for job in unique_jobs[:20]:
+                with st.container(border=True):
+                    st.markdown(f"**[{job['title']}]({job['link']})**")
+                    st.caption
