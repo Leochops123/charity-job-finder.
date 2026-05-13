@@ -9,9 +9,6 @@ st.set_page_config(page_title="Third Sector Job Finder", layout="wide")
 st.title("💼 Third Sector & Charity Job Finder")
 st.success("✅ Last 24 Hours • Multi-Source • Fixed")
 
-if "keywords" not in st.session_state:
-    st.session_state.keywords = ["manager", "officer", "coordinator"]
-
 if "custom_sources" not in st.session_state:
     st.session_state.custom_sources = [
         {"name": "CharityJob", "active": True},
@@ -88,4 +85,25 @@ if st.button("🔍 Search Last 24 Hours", type="primary", use_container_width=Tr
             if not source.get("active"):
                 continue
             st.info(f"Scanning {source['name']}...")
-            if source["name"] ==
+            
+            if source["name"] == "CharityJob":
+                jobs = scrape_charityjob("manager", location)
+            elif source["name"] == "Indeed":
+                jobs = scrape_indeed("manager", location)
+            elif source["name"] == "Third Sector":
+                jobs = scrape_thirdsector("manager")
+            else:
+                jobs = []
+            
+            all_jobs.extend(jobs)
+            time.sleep(1)
+
+        if all_jobs:
+            st.success(f"Found {len(all_jobs)} jobs")
+            for job in all_jobs[:25]:
+                with st.expander(f"{job['title']} — {job['source']}"):
+                    st.markdown(f"[🔗 View Job]({job['link']})")
+        else:
+            st.warning("No jobs found this time.")
+
+st.caption("✅ Clean & Fixed Version")
