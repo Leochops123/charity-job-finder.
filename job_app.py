@@ -9,9 +9,9 @@ import hashlib
 
 st.set_page_config(page_title="Third Sector Job Finder", layout="wide")
 st.title("💼 Third Sector & Charity Job Finder")
-st.success("✅ Fully Fixed Version")
+st.success("✅ Fixed Working Version")
 
-# ===================== SESSION STATE =====================
+# Session State
 if "keywords" not in st.session_state:
     st.session_state.keywords = ["fundraising", "manager", "officer"]
 
@@ -38,4 +38,79 @@ def is_within_24h(text):
     if not text:
         return True
     t = text.lower()
-    keywords = ["today",
+    words = ["today", "1 day ago", "hours ago", "just posted"]
+    for w in words:
+        if w in t:
+            return True
+    return False
+
+# Scraper
+def scrape_charityjob(keyword, location):
+    try:
+        url = "https://www.charityjob.co.uk/jobs?Keywords=" + quote_plus(keyword) + "&Sort=Date"
+        if location and location.lower() not in ["any", "anywhere", ""]:
+            url = url + "&Location=" + quote_plus(location)
+        
+        resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+        soup = BeautifulSoup(resp.text, "html.parser")
+        
+        jobs = []
+        for card in soup.select("article, div.job-result"):
+            title_tag = card.select_one("a[href*='/jobs/']")
+            if title_tag:
+                title = title_tag.get_text(strip=True)
+                if len(title) < 15:
+                    continue
+                link = title_tag["href"]
+                full_link = "https://www.charityjob.co.uk" + link if link.startswith("/") else link
+                if is_within_24h(card.get_text()):
+                    jobs.append({"title": title, "link": full_link, "source": "CharityJob"})
+        return jobs[:25]
+    except:
+        return []
+
+# Sidebar
+with st.sidebar:
+    st.header("Filters")
+    st.subheader("Location")
+    new_loc = st.text_input("Preferred Location", value=st.session_state.location)
+    if new_loc != st.session_state.location:
+        st.session_state.location = new_loc
+
+    st.subheader("Keywords")
+    new_kw = st.text_input("Add Keyword", placeholder="e.g. fundraising")
+    if st.button("Add Keyword") and new_kw.strip():
+        kw = new_kw.strip().lower()
+        if kw not in st.session_state.keywords:
+            st.session_state.keywords.append(kw)
+            st.rerun()
+
+    for kw in list(st.session_state.keywords):
+        col1, col2 = st.columns([4,1])
+        col1.write("• " + kw)
+        if col2.button("Delete", key="del_" + kw):
+            st.session_state.keywords.remove(kw)
+            st.rerun()
+
+# Main
+st.subheader("Search Last 24 Hours")
+
+if st.button("🔍 Search Last 24 Hours", type="primary", use_container_width=True):
+    with st.spinner("Searching..."):
+        all_jobs = []
+        for kw in st.session_state.keywords:
+            jobs = scrape_charityjob(kw, st.session_state.location)
+            all_jobs.extend(jobs)
+            time.sleep(1)
+
+        unique_jobs = []
+        for job in all_jobs:
+            if get_job_hash(job["title"], job["link"]) not in seen_jobs:
+                seen_jobs.add(get_job_hash(job["title"], job["link"]))
+                unique_jobs.append(job)
+
+        save_seen_jobs()
+
+        if unique_jobs:
+            st.success("Found " + str(len(unique_jobs)) + " jobs!")
+            for job in unique_jobs[:
