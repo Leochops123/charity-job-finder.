@@ -21,7 +21,7 @@ if "sources" not in st.session_state:
 with st.sidebar:
     st.header("⚙️ Settings")
     
-    # Positive Keywords Only
+    # Positive Keywords
     pos_input = st.text_input("Search Keywords (comma separated)", 
                              ", ".join(st.session_state.positive_keywords))
     
@@ -44,7 +44,4 @@ with st.sidebar:
     available_sources = ["CharityJob", "ThirdSector", "Prospects", "Indeed", "Guardian Jobs"]
     selected_sources = st.multiselect("Select Sources", 
                                      available_sources, 
-                                     default=st.session_state.sources)
-    
-    new_source = st.text_input("Add Custom Source Name")
-    if st.button("➕ Add
+                                     default=st
