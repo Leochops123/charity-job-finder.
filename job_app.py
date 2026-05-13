@@ -41,4 +41,10 @@ with st.sidebar:
     
     # Job Sources
     st.subheader("📌 Job Sources")
-    available_sources = ["CharityJob", "ThirdSector", "Prospects", "Indeed", "Guardian
+    available_sources = ["CharityJob", "ThirdSector", "Prospects", "Indeed", "Guardian Jobs"]
+    selected_sources = st.multiselect("Select Sources", 
+                                     available_sources, 
+                                     default=st.session_state.sources)
+    
+    new_source = st.text_input("Add Custom Source Name")
+    if st.button("➕ Add
