@@ -13,7 +13,7 @@ from typing import List, Dict
 
 st.set_page_config(page_title="Third Sector Job Finder", layout="wide")
 st.title("💼 Third Sector & Charity Job Finder")
-st.success("✅ All Sources Active • Guardian + Totaljobs Included")
+st.success("✅ All Sources Active")
 
 # ===================== SESSION STATE =====================
 if "keywords" not in st.session_state:
@@ -35,21 +35,4 @@ if "smtp_settings" not in st.session_state:
     st.session_state.smtp_settings = {
         "enabled": False,
         "sender_email": "",
-        "app_password": "",
-        "recipient_email": ""
-    }
-
-SEEN_FILE = "seen_jobs.json"
-seen_jobs: set = set()
-if os.path.exists(SEEN_FILE):
-    try:
-        with open(SEEN_FILE, "r") as f:
-            seen_jobs = set(json.load(f))
-    except:
-        pass
-
-def save_seen_jobs():
-    with open(SEEN_FILE, "w") as f:
-        json.dump(list(seen_jobs), f)
-
-def get_job_hash(title
+        "
